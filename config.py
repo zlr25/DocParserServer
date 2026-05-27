@@ -32,6 +32,16 @@ class AppConfig(metaclass=SingletonMeta):
     minio_address: str = os.getenv("MINIO_ADDRESS", "minio-wanwu:9000")
     minio_access_key: str = os.getenv("MINIO_ACCESS_KEY", "root")
     minio_secret_key: str = os.getenv("MINIO_SECRET_KEY", "your_sk")
+
+    # OSS 存储类型配置
+    # 可选值: minio (默认), oss
+    oss_type: str = os.getenv("OSS_TYPE", "minio").strip().lower()
+
+    # OSS 配置（当 OSS_TYPE=oss 时使用，支持私有云 OSS）
+    oss_endpoint: str = os.getenv("OSS_ENDPOINT", "oss.example.com")
+    oss_access_key: str = os.getenv("OSS_ACCESS_KEY", "")
+    oss_secret_key: str = os.getenv("OSS_SECRET_KEY", "")
+    oss_bucket: str = os.getenv("OSS_BUCKET", "doc-rag-public")
     version: str = os.getenv("version", "private")
 
 config = AppConfig()

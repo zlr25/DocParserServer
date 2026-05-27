@@ -6,7 +6,7 @@ import requests
 from models.paddleocrvl.table_process_utils import extract_text_with_tables
 from utils.file_utils import save_images_res_to_local, upload_to_oss
 from utils.log_utils import setup_logger
-from utils.minio_utils import upload_file_to_minio
+from utils.storage.factory import StorageFactory
 from utils.monitor_utils import log_time
 from config import config as app_config
 
@@ -50,9 +50,8 @@ class PaddleOCRVLClient:
                     continue
 
                 try:
-                    download_link = upload_file_to_minio(
-                        image_path
-                    )
+                    storage = StorageFactory.get_storage()
+                    download_link = storage.upload_file(image_path)
 
                     new_block_content = f'<img src="{download_link}" />'
                     item['block_content'] = new_block_content
@@ -94,7 +93,8 @@ class PaddleOCRVLClient:
                 logger.warn(f"warning：image does not exist. {img_filename} 在目录 {image_dir} 中不存在，跳过替换")
                 continue
             try:
-                download_link = upload_file_to_minio(image_path)
+                storage = StorageFactory.get_storage()
+                download_link = storage.upload_file(image_path)
                 ocr_text = ""
                 # OCR提取文字
                 logger.info(f"extract_image_content is: {extract_image_content}")

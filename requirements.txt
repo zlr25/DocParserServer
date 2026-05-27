@@ -4,5 +4,6 @@ flask_cors==6.0.1
 html_text==0.7.1
 marshmallow==4.1.0
 minio==7.2.16
+oss2==2.19.1
 paddleocr==3.3.1
 Requests==2.32.5
