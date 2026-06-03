@@ -163,14 +163,16 @@ class TestOSSStorage:
             'bucket': 'test-bucket'
         }
 
-        with patch('utils.storage.oss_storage.oss2.Auth') as mock_auth:
-            with patch('utils.storage.oss_storage.oss2.Bucket') as mock_bucket:
-                storage = OSSStorage(config)
+        with patch('utils.storage.oss_storage.boto3.client') as mock_client:
+            mock_client_instance = Mock()
+            mock_client.return_value = mock_client_instance
+            mock_client_instance.head_bucket.return_value = {}
 
-                assert storage.endpoint == 'oss.example.com'
-                assert storage.bucket == 'test-bucket'
-                mock_auth.assert_called_once_with('test_access_key', 'test_secret_key')
-                mock_bucket.assert_called_once()
+            storage = OSSStorage(config)
+
+            assert storage.endpoint == 'https://oss.example.com'
+            assert storage.bucket == 'test-bucket'
+            mock_client.assert_called_once()
 
     def test_upload_file_success(self):
         """测试上传文件成功"""
@@ -181,22 +183,22 @@ class TestOSSStorage:
             'bucket': 'test-bucket'
         }
 
-        with patch('utils.storage.oss_storage.oss2.Auth'):
-            with patch('utils.storage.oss_storage.oss2.Bucket') as mock_bucket:
-                mock_bucket_instance = Mock()
-                mock_bucket.return_value = mock_bucket_instance
-                mock_bucket_instance.put_object.return_value = None
-                mock_bucket_instance.sign_url.return_value = 'https://test-bucket.oss.example.com/test.jpg?signature=xxx'
+        with patch('utils.storage.oss_storage.boto3.client') as mock_client:
+            mock_client_instance = Mock()
+            mock_client.return_value = mock_client_instance
+            mock_client_instance.head_bucket.return_value = {}
+            mock_client_instance.put_object.return_value = {}
+            mock_client_instance.generate_presigned_url.return_value = 'https://oss.example.com/test-bucket/test.jpg?signature=xxx'
 
-                with patch('os.path.exists', return_value=True):
-                    with patch('builtins.open', create=True) as mock_open:
-                        mock_open.return_value.__enter__.return_value = MagicMock()
+            with patch('os.path.exists', return_value=True):
+                with patch('builtins.open', create=True) as mock_open:
+                    mock_open.return_value.__enter__.return_value = MagicMock()
 
-                        storage = OSSStorage(config)
-                        result = storage.upload_file('/tmp/test.jpg')
+                    storage = OSSStorage(config)
+                    result = storage.upload_file('/tmp/test.jpg')
 
-                        assert result is not None
-                        mock_bucket_instance.put_object.assert_called_once()
+                    assert result is not None
+                    mock_client_instance.put_object.assert_called_once()
 
     def test_upload_file_not_found(self):
         """测试文件不存在"""
@@ -207,13 +209,16 @@ class TestOSSStorage:
             'bucket': 'test-bucket'
         }
 
-        with patch('utils.storage.oss_storage.oss2.Auth'):
-            with patch('utils.storage.oss_storage.oss2.Bucket'):
-                with patch('os.path.exists', return_value=False):
-                    storage = OSSStorage(config)
-                    result = storage.upload_file('/tmp/not_exist.jpg')
+        with patch('utils.storage.oss_storage.boto3.client') as mock_client:
+            mock_client_instance = Mock()
+            mock_client.return_value = mock_client_instance
+            mock_client_instance.head_bucket.return_value = {}
 
-                    assert result is None
+            with patch('os.path.exists', return_value=False):
+                storage = OSSStorage(config)
+                result = storage.upload_file('/tmp/not_exist.jpg')
+
+                assert result is None
 
     def test_get_download_url(self):
         """测试获取下载链接"""
@@ -224,14 +229,18 @@ class TestOSSStorage:
             'bucket': 'test-bucket'
         }
 
-        with patch('utils.storage.oss_storage.oss2.Auth'):
-            with patch('utils.storage.oss_storage.oss2.Bucket') as mock_bucket:
-                mock_bucket_instance = Mock()
-                mock_bucket.return_value = mock_bucket_instance
-                mock_bucket_instance.sign_url.return_value = 'https://test-bucket.oss.example.com/test.jpg?OSSAccessKeyId=xxx&Signature=yyy'
+        with patch('utils.storage.oss_storage.boto3.client') as mock_client:
+            mock_client_instance = Mock()
+            mock_client.return_value = mock_client_instance
+            mock_client_instance.head_bucket.return_value = {}
+            mock_client_instance.generate_presigned_url.return_value = 'https://oss.example.com/test-bucket/test.jpg?X-Amz-Signature=xxx'
 
-                storage = OSSStorage(config)
-                url = storage.get_download_url('test.jpg')
+            storage = OSSStorage(config)
+            url = storage.get_download_url('test.jpg')
 
-                assert 'test.jpg' in url
-                mock_bucket_instance.sign_url.assert_called_once_with('GET', 'test.jpg', 3600 * 24 * 7)
+            assert 'test.jpg' in url
+            mock_client_instance.generate_presigned_url.assert_called_once_with(
+                'get_object',
+                Params={'Bucket': 'test-bucket', 'Key': 'test.jpg'},
+                ExpiresIn=3600 * 24 * 7
+            )

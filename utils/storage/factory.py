@@ -54,6 +54,7 @@ class StorageFactory:
                 'access_key': config.oss_access_key,
                 'secret_key': config.oss_secret_key,
                 'bucket': config.oss_bucket,
+                'region': config.oss_region,
             }
             return OSSStorage(oss_config)
 

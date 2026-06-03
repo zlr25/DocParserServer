@@ -212,7 +212,6 @@ docker run -d --name doc_parser \
 -e MINIO_ACCESS_KEY="root" \
 -e MINIO_SECRET_KEY="your_sk" \
 -e BFF_SERVICE_MINIO="http://bff-service:6668/v1/api/deploy/info" \  #如果不与万悟平台集成使用服务，则删除本行
--e STIRLING_ADDRESS="http://192.168.0.21:8080/api/v1/convert/file/pdf" \  #如果不使用扩展功能1：多类型文档解析，则删除本行
 crpi-6pj79y7ddzdpexs8.cn-hangzhou.personal.cr.aliyuncs.com/wanwulite/doc_parser_server:1.2-20251112-amd64-paddle \
 sh -c "chmod +x /app/DocParserServer-main/docker_start_app.sh && /app/DocParserServer-main/docker_start_app.sh"
 # 启动paddleocrvl容器
@@ -230,12 +229,12 @@ docker run \
 ##### 步骤1：拉取模型服务基础镜像
 ```bash
 # arm64
-docker pull crpi-6pj79y7ddzdpexs8.cn-hangzhou.personal.cr.aliyuncs.com/wanwulite/doc_parser_server:1.3-20260130-arm64-paddle-910b
+docker pull crpi-6pj79y7ddzdpexs8.cn-hangzhou.personal.cr.aliyuncs.com/wanwulite/doc_parser_server:1.4-20260603-arm64-910b
 ```
 ##### 步骤2：启动模型服务容器
 ```bash
 # 启动doc_parser_server容器
-docker run --rm \
+docker run --itd \
     --name doc_parser \
     -p 8083:8083 \
     --network wanwu-net \  #如果不与万悟平台集成使用服务，则删除本行
@@ -245,9 +244,8 @@ docker run --rm \
     -e MINIO_ACCESS_KEY="root" \
     -e MINIO_SECRET_KEY="your_sk" \
     -e BFF_SERVICE_MINIO="http://bff-service:6668/v1/api/deploy/info" \  #如果不与万悟平台集成使用服务，则删除本行
-    -e STIRLING_ADDRESS="http://192.168.0.21:8080/api/v1/convert/file/pdf" \  #如果不使用扩展功能1：多类型文档解析，则删除本行
     --shm-size=10g \
-    --device /dev/davinci0 \   # 替换成你需要的卡
+    --device /dev/davinci0 \   # 替换成您指定的显卡序号
     --device /dev/davinci_manager \
     --device /dev/devmm_svm \
     --device /dev/hisi_hdc \
@@ -258,6 +256,13 @@ docker run --rm \
     -v /usr/local/Ascend/driver/version.info:/usr/local/Ascend/driver/version.info \
     -v /etc/ascend_install.info:/etc/ascend_install.info \
     -v /root/.cache:/root/.cache \
+    -v ~/doc_parser/uploads:/app/DocParserServer/models/paddleocrvl/uploads \
+    -v ~/doc_parser/output:/app/DocParserServer/models/paddleocrvl/output \
+    -v ~/doc_parser/images:/app/DocParserServer/data/images \
+    -v ~/doc_parser/logs:/app/DocParserServer/logs \
+    -v ~/doc_parser/flask_server.log:/app/DocParserServer/models/paddleocrvl/flask_server.log \
+    -v ~/doc_parser/flask_service.log:/app/DocParserServer/models/paddleocrvl/flask_service.log \
+    -v ~/doc_parser/paddleocr_vllm_npu4.log:/workspace/paddleocr_vllm_npu4.log \
     crpi-6pj79y7ddzdpexs8.cn-hangzhou.personal.cr.aliyuncs.com/wanwulite/doc_parser_server:1.3-20260130-arm64-paddle-910b \
     bash -c "chmod +x /app/docker_start_all.sh && /app/docker_start_all.sh"
 ```

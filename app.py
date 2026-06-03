@@ -120,6 +120,10 @@ def model_parser_file():
                 message=f"File type is supported, but convert to model input(pdf/image) failed. Check file converter service. File_name: {file_name}",
                 content=""
             )
+        # 如果是图片类型，强制关闭 extract_image（图片本身无需再提取图片）
+        if file_path.lower().endswith(('.png', '.jpg', '.jpeg', '.webp', '.gif')):
+            extract_image = False
+            logger.info(f"Image file detected, force extract_image=False")
         logger.info("start to parse file: %s", file_name)
         # 无模型mock返回测试
         # response = {

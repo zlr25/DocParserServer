@@ -18,7 +18,7 @@ class AppConfig(metaclass=SingletonMeta):
     """应用配置类，集中管理所有环境变量"""
     # 服务相关配置
     model_type: str = os.getenv("MODEL_TYPE", "mineru") #mineru, paddleocrvl
-    model_address: str = os.getenv("MODEL_ADDRESS", "http://localhost:8000/file_parse")
+    model_address: str = os.getenv("MODEL_ADDRESS", "http://localhost:8118/v1")
     doc_parser_server_port: int = int(os.getenv("DOC_PARSER_SERVER_PORT", 8083))
 
     # 文件转换服务配置
@@ -42,6 +42,7 @@ class AppConfig(metaclass=SingletonMeta):
     oss_access_key: str = os.getenv("OSS_ACCESS_KEY", "")
     oss_secret_key: str = os.getenv("OSS_SECRET_KEY", "")
     oss_bucket: str = os.getenv("OSS_BUCKET", "doc-rag-public")
+    oss_region: str = os.getenv("OSS_REGION", "")
     version: str = os.getenv("version", "private")
 
 config = AppConfig()

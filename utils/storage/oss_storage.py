@@ -1,30 +1,88 @@
 import os
 from typing import Optional
-
-import oss2
+import boto3
+from botocore.exceptions import ClientError
 
 from .base import StorageBase
 from utils.log_utils import setup_logger
 
 logger = setup_logger(__name__, './logs/app.log')
 
+# 连接超时设置（秒）
+OSS_CONNECT_TIMEOUT = int(os.getenv("OSS_CONNECT_TIMEOUT", "10"))
+OSS_READ_TIMEOUT = int(os.getenv("OSS_READ_TIMEOUT", "30"))
+
 
 class OSSStorage(StorageBase):
-    """OSS SDK 实现的存储后端（支持私有云）"""
+    """通用 S3 协议存储后端实现（支持华为 OBS、阿里云 OSS、MinIO 等）"""
 
     def __init__(self, config: dict):
-        self.endpoint = config.get('endpoint')
+        self.endpoint = config.get('endpoint', '')
         self.access_key = config.get('access_key')
         self.secret_key = config.get('secret_key')
         self.bucket = config.get('bucket')
+        self.region = config.get('region', '')
+
+        # 自动添加 https:// 前缀（如果未指定协议）
+        if self.endpoint and not self.endpoint.startswith(('http://', 'https://')):
+            self.endpoint = f"https://{self.endpoint}"
 
         logger.info(f"OSS endpoint: {self.endpoint}")
         logger.info(f"OSS bucket: {self.bucket}")
+        if self.region:
+            logger.info(f"OSS region: {self.region}")
+        logger.info(f"OSS connect_timeout: {OSS_CONNECT_TIMEOUT}s, read_timeout: {OSS_READ_TIMEOUT}s")
 
-        # 创建 OSS 认证对象
-        self.auth = oss2.Auth(self.access_key, self.secret_key)
-        # 创建 Bucket 对象
-        self.bucket_obj = oss2.Bucket(self.auth, self.endpoint, self.bucket)
+        # 创建 S3 兼容客户端
+        self.client = self._create_client()
+
+        # 验证连接
+        self._verify_connection()
+
+    def _create_client(self):
+        """创建 S3 兼容客户端"""
+        client_kwargs = {
+            'service_name': 's3',
+            'endpoint_url': self.endpoint,
+            'aws_access_key_id': self.access_key,
+            'aws_secret_access_key': self.secret_key,
+            'config': boto3.session.Config(
+                connect_timeout=OSS_CONNECT_TIMEOUT,
+                read_timeout=OSS_READ_TIMEOUT,
+                signature_version='s3v4'
+            )
+        }
+
+        # region 有值则添加
+        if self.region:
+            client_kwargs['region_name'] = self.region
+
+        # 禁用 SSL 证书验证（某些私有云环境需要）
+        # 可以通过环境变量控制
+        verify_ssl = os.getenv("OSS_VERIFY_SSL", "true").lower() == "true"
+        if not verify_ssl:
+            client_kwargs['verify'] = False
+
+        return boto3.client(**client_kwargs)
+
+    def _verify_connection(self):
+        """验证 OSS 连接是否正常"""
+        try:
+            # 尝试访问 bucket 来验证连接
+            self.client.head_bucket(Bucket=self.bucket)
+            logger.info(f"OSS 连接验证成功: bucket '{self.bucket}' 可访问")
+        except ClientError as e:
+            error_code = e.response.get('Error', {}).get('Code', 'Unknown')
+            if error_code == '404' or error_code == 'NoSuchBucket':
+                logger.error(f"OSS 连接验证失败: bucket '{self.bucket}' 不存在")
+            elif error_code == '403' or error_code == 'AccessDenied':
+                logger.error(f"OSS 连接验证失败: AccessKey 无权限访问 bucket '{self.bucket}'")
+            else:
+                logger.error(f"OSS 连接验证失败: {e}")
+            raise
+        except Exception as e:
+            logger.error(f"OSS 连接验证失败: {e}")
+            raise
 
     def upload_file(self, file_path: str, bucket_name: Optional[str] = None,
                     overwrite_file_name: Optional[str] = None) -> Optional[str]:
@@ -54,7 +112,11 @@ class OSSStorage(StorageBase):
 
             # 上传文件到 OSS
             with open(file_path, 'rb') as f:
-                self.bucket_obj.put_object(object_name, f)
+                self.client.put_object(
+                    Bucket=self.bucket,
+                    Key=object_name,
+                    Body=f
+                )
 
             logger.info(f"File '{object_name}' uploaded to OSS bucket '{self.bucket}'")
 
@@ -63,7 +125,7 @@ class OSSStorage(StorageBase):
             logger.info(f"File uploaded successfully, download link: {download_url}")
             return download_url
 
-        except oss2.exceptions.OssError as e:
+        except ClientError as e:
             logger.error(f"OSS error: {e}")
             return None
         except Exception as e:
@@ -83,9 +145,10 @@ class OSSStorage(StorageBase):
         Returns:
             str: 下载链接
         """
-        # 生成签名 URL
-        signed_url = self.bucket_obj.sign_url('GET', object_name, expires)
-        # 如果 endpoint 不包含协议前缀，添加 https
-        if not signed_url.startswith('http'):
-            signed_url = f"https://{signed_url}"
+        # 生成预签名 URL
+        signed_url = self.client.generate_presigned_url(
+            'get_object',
+            Params={'Bucket': self.bucket, 'Key': object_name},
+            ExpiresIn=expires
+        )
         return signed_url
